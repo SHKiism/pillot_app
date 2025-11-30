@@ -10,6 +10,8 @@ dependencyResolutionManagement {
     repositories {
         google()
         mavenCentral()
+        maven { url = uri("https://maven.neshan.org/artifactory/public-maven") }
+        maven { url = uri("https://dl.bintray.com/neshan/neshan-android-sdk") }
     }
 }
 rootProject.name = "Pillot App"

@@ -1,7 +1,13 @@
 <?xml version="1.0" encoding="utf-8"?>
 <RelativeLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:app="http://schemas.android.com/apk/res-auto"
     android:layout_width="match_parent"
     android:layout_height="match_parent">
+
+    <!--    <org.neshan.mapsdk.MapView-->
+    <!--        android:id="@+id/map"-->
+    <!--        android:layout_width="match_parent"-->
+    <!--        android:layout_height="match_parent" />-->
 
     <androidx.fragment.app.FragmentContainerView
         android:id="@+id/map"
@@ -9,33 +15,75 @@
         android:layout_width="match_parent"
         android:layout_height="match_parent" />
 
+    <TextView
+        android:id="@+id/txtLog"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:layout_margin="20dp"
+        android:background="@color/black"
+        android:padding="10dp"
+        android:text="Log Holder"
+        android:textColor="@color/white"
+        android:textSize="18sp" />
+
     <LinearLayout
         android:layout_width="wrap_content"
         android:layout_height="wrap_content"
-        android:layout_alignParentRight="true"
-        android:layout_alignParentBottom="true"
+        android:layout_centerInParent="true"
         android:orientation="vertical">
 
         <ImageView
+            android:id="@+id/imgHoverPin"
+            android:layout_width="50dp"
+            android:layout_height="50dp"
+            android:src="@drawable/hover_pin" />
+
+        <View
+            android:layout_width="0dp"
+            android:layout_height="50dp" />
+
+    </LinearLayout>
+
+    <LinearLayout
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:layout_alignParentEnd="true"
+        android:layout_alignParentBottom="true"
+        android:gravity="center"
+        android:orientation="horizontal">
+
+        <ImageView
+            android:id="@+id/imgStopGPS"
+            android:layout_width="45dp"
+            android:layout_height="45dp"
+            android:layout_margin="18dp"
+            android:background="@color/white"
+            android:src="@drawable/my_location_svgrepo_com"
+            app:tint="#ff0000" />
+
+        <Button
+            android:id="@+id/btnUnpinLoc"
+            android:layout_width="0dp"
+            android:layout_height="60dp"
+            android:layout_marginEnd="12dp"
+            android:layout_weight="1"
+            android:text="Party is over" />
+
+        <Button
+            android:id="@+id/btnPinLoc"
+            android:layout_width="0dp"
+            android:layout_height="60dp"
+            android:layout_weight="1"
+            android:text="Let's Rock" />
+
+        <ImageView
             android:id="@+id/imgGPS"
-            android:layout_width="40dp"
-            android:layout_height="40dp"
-            android:layout_margin="12dp"
-            android:src="@drawable/ic_place" />
-
-        <ImageView
-            android:id="@+id/imgRecordGPS"
-            android:layout_width="40dp"
-            android:layout_height="40dp"
-            android:layout_margin="12dp"
-            android:src="@drawable/ic_add" />
-
-        <ImageView
-            android:id="@+id/imgGpsList"
-            android:layout_width="40dp"
-            android:layout_height="40dp"
-            android:layout_margin="12dp"
-            android:src="@drawable/ic_list" />
+            android:layout_width="45dp"
+            android:layout_height="45dp"
+            android:layout_margin="18dp"
+            android:background="@color/white"
+            android:src="@drawable/my_location_svgrepo_com"
+            app:tint="#00ff00" />
 
     </LinearLayout>
 
