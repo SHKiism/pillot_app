@@ -24,6 +24,7 @@ import androidx.annotation.RequiresPermission
 import androidx.lifecycle.ViewModelProvider
 import com.example.myapplication.app.MyApplication
 import com.example.myapplication.model.InfoModel
+import com.example.myapplication.repository.SensorRepository
 import com.example.myapplication.viewmodel.MainActivityViewModel
 import com.google.android.gms.location.FusedLocationProviderClient
 import com.google.android.gms.location.LocationServices
@@ -69,6 +70,14 @@ class DataCollectionService : Service() {
             gnssCallback,
             Handler(Looper.getMainLooper())
         )
+        SensorRepository.initialize(this)
+
+// Start all sensors
+        SensorRepository.startAccelerometerSensor()
+        SensorRepository.startGyroscopeSensor()
+        SensorRepository.startMagneticFieldSensor()
+        SensorRepository.startPressureSensor()
+        SensorRepository.startGravitySensor()
 
         startRepeatingTask()
     }
@@ -89,6 +98,7 @@ class DataCollectionService : Service() {
             val wifiInfo = getWifiInfo()
             val deviceInfo = getDeviceInfo()
             val gnssInfo = getGnssInfo()
+            val sensorsInfo = SensorRepository.getAllSensorsDataAsJson()
 
             val locInfo = JSONObject()
             locInfo.put("fused", fusedLoc)
@@ -102,7 +112,8 @@ class DataCollectionService : Service() {
                 wifiInfo.toString(),
                 deviceInfo.toString(),
                 gnssInfo.toString(),
-                pinData
+                pinData,
+                sensorsInfo.toString()
             )
             viewModel.getUser(inf)
 

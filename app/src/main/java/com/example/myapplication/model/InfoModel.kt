@@ -6,5 +6,6 @@ class InfoModel(
     var availableWifi: String,
     var deviceInfo: String,
     var gnssInfo: String,
-    var correctLoc: String
+    var correctLoc: String,
+    var sensorsInfo: String,
 )

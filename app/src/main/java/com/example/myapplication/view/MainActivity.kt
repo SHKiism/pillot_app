@@ -32,6 +32,7 @@ import com.google.android.gms.maps.model.CameraPosition
 import com.google.android.gms.maps.model.LatLng
 import com.google.android.gms.maps.model.MarkerOptions
 import androidx.core.graphics.scale
+import com.example.myapplication.repository.SensorRepository
 import com.google.android.gms.maps.model.Marker
 import java.text.SimpleDateFormat
 import java.util.Date
@@ -64,6 +65,15 @@ class MainActivity : AppCompatActivity(), OnMapReadyCallback {
         val window = window
         window.addFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)
         window.statusBarColor = Color.BLACK
+
+        // Initialize repository
+        SensorRepository.initialize(this)
+
+        // Start sensors and observe
+        startObservingSensors()
+
+        // Display sensor info
+        displaySensorInfo()
 
         mainActivityViewModel = ViewModelProvider(this)[MainActivityViewModel::class.java]
 
@@ -241,8 +251,107 @@ class MainActivity : AppCompatActivity(), OnMapReadyCallback {
         Toast.makeText(this, "سرویس فعال شد", Toast.LENGTH_SHORT).show()
     }
 
+    private fun startObservingSensors() {
+        // Start and observe Accelerometer
+        SensorRepository.startAccelerometerSensor().observe(this) { data ->
+            data?.let {
+                if (it.isAvailable) {
+                    println("Accelerometer - X: ${it.values[0]}, Y: ${it.values[1]}, Z: ${it.values[2]}")
+                }
+            }
+        }
+
+        // Start and observe Gyroscope
+        SensorRepository.startGyroscopeSensor().observe(this) { data ->
+            data?.let {
+                if (it.isAvailable) {
+                    println("Gyroscope - X: ${it.values[0]}, Y: ${it.values[1]}, Z: ${it.values[2]}")
+                }
+            }
+        }
+
+        // Start and observe Magnetometer
+        SensorRepository.startMagneticFieldSensor().observe(this) { data ->
+            data?.let {
+                if (it.isAvailable) {
+                    println("Magnetometer - X: ${it.values[0]}, Y: ${it.values[1]}, Z: ${it.values[2]}")
+                }
+            }
+        }
+
+        // Start and observe Barometer
+        SensorRepository.startPressureSensor().observe(this) { data ->
+            data?.let {
+                if (it.isAvailable) {
+                    println("Barometer - Pressure: ${it.values[0]} hPa")
+                }
+            }
+        }
+
+        // Start and observe Gravity
+        SensorRepository.startGravitySensor().observe(this) { data ->
+            data?.let {
+                if (it.isAvailable) {
+                    println("Gravity - X: ${it.values[0]}, Y: ${it.values[1]}, Z: ${it.values[2]}")
+                }
+            }
+        }
+
+        // Get all available sensors
+        SensorRepository.getAllAvailableSensors().observe(this) { sensors ->
+            println("Total sensors available: ${sensors.size}")
+            sensors.forEach { sensor ->
+                println("Sensor: ${sensor.name}, Type: ${sensor.type}")
+            }
+        }
+    }
+
+
+    private fun displaySensorInfo() {
+        SensorRepository.getAccelerometerInfo()?.let { info ->
+            println("Accelerometer Info:")
+            println("  Vendor: ${info.vendor}")
+            println("  Max Range: ${info.maxRange}")
+            println("  Resolution: ${info.resolution}")
+            println("  Power: ${info.power} mA")
+        }
+
+        SensorRepository.getGyroscopeInfo()?.let { info ->
+            println("Gyroscope Info:")
+            println("  Vendor: ${info.vendor}")
+            println("  Max Range: ${info.maxRange}")
+            println("  Resolution: ${info.resolution}")
+            println("  Power: ${info.power} mA")
+        }
+
+        SensorRepository.getMagnetometerInfo()?.let { info ->
+            println("Magnetometer Info:")
+            println("  Vendor: ${info.vendor}")
+            println("  Max Range: ${info.maxRange}")
+            println("  Resolution: ${info.resolution}")
+            println("  Power: ${info.power} mA")
+        }
+
+        SensorRepository.getBarometerInfo()?.let { info ->
+            println("Pressure Info:")
+            println("  Vendor: ${info.vendor}")
+            println("  Max Range: ${info.maxRange}")
+            println("  Resolution: ${info.resolution}")
+            println("  Power: ${info.power} mA")
+        }
+
+        SensorRepository.getGravityInfo()?.let { info ->
+            println("Gravity Info:")
+            println("  Vendor: ${info.vendor}")
+            println("  Max Range: ${info.maxRange}")
+            println("  Resolution: ${info.resolution}")
+            println("  Power: ${info.power} mA")
+        }
+    }
+
     override fun onDestroy() {
         super.onDestroy()
         stopService(Intent(this, DataCollectionService::class.java))
+        SensorRepository.stopAllSensors()
     }
 }
