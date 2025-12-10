@@ -134,7 +134,8 @@ class MainActivity : AppCompatActivity(), OnMapReadyCallback {
     private fun setupUi() {
         binding.imgGPS.setOnClickListener {
             if (isLocationPermissionGranted()) {
-                startService()
+                val interval = getValidatedInterval()
+                startService(interval)
 // updateMarker(35.7676216, 51.4247806)
 //                mainActivityViewModel.getUserResponse().observe(this) { response ->
 //                    try {
@@ -184,6 +185,29 @@ class MainActivity : AppCompatActivity(), OnMapReadyCallback {
             currentSelectedMarker?.remove()
             binding.imgHoverPin.visibility = View.VISIBLE
             CorrectLocHolder.clear()
+        }
+    }
+
+    private fun getValidatedInterval(): Int {
+        val inputText = binding.edtInterval.text.toString()
+
+        return try {
+            val value = inputText.toIntOrNull() ?: 5
+
+            if (value < 5) {
+                Toast.makeText(
+                    this,
+                    "حداقل فاصله ارسال 5 ثانیه است",
+                    Toast.LENGTH_SHORT
+                ).show()
+                binding.edtInterval.setText("5")
+                5
+            } else {
+                value
+            }
+        } catch (e: Exception) {
+            binding.edtInterval.setText("5")
+            5
         }
     }
 
@@ -241,14 +265,17 @@ class MainActivity : AppCompatActivity(), OnMapReadyCallback {
         return mMap.cameraPosition.target
     }
 
-    private fun startService() {
+    private fun startService(intervalSeconds: Int) {
         val intent = Intent(this, DataCollectionService::class.java)
+        intent.putExtra("INTERVAL_SECONDS", intervalSeconds)
+
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
             Log.i("TAG", "onCreate: start foreground")
             startForegroundService(intent)
         } else
             startService(intent)
-        Toast.makeText(this, "سرویس فعال شد", Toast.LENGTH_SHORT).show()
+        Toast.makeText(this, "سرویس فعال شد - فاصله: $intervalSeconds ثانیه", Toast.LENGTH_SHORT)
+            .show()
     }
 
     private fun startObservingSensors() {

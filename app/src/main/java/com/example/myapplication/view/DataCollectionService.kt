@@ -43,6 +43,7 @@ class DataCollectionService : Service() {
     private val timer = Timer()
     private var latestMeasurements: GnssMeasurementsEvent? = null
     lateinit var clock: GnssClock
+    private var intervalSeconds: Int = 5
     private val gnssCallback =
         object : GnssMeasurementsEvent.Callback() {
             override fun onGnssMeasurementsReceived(eventArgs: GnssMeasurementsEvent) {
@@ -78,16 +79,38 @@ class DataCollectionService : Service() {
         SensorRepository.startMagneticFieldSensor()
         SensorRepository.startPressureSensor()
         SensorRepository.startGravitySensor()
+    }
 
+
+    override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
+        // Get interval from intent, default to 5 if not provided
+        intervalSeconds = intent?.getIntExtra("INTERVAL_SECONDS", 5) ?: 5
+
+        // Ensure minimum 5 seconds
+        if (intervalSeconds < 5) {
+            intervalSeconds = 5
+        }
+
+        Log.d("SERVICE", "Starting service with interval: $intervalSeconds seconds")
+
+        // Cancel any existing timer and start new one with updated interval
+//        timer?.cancel()
+//        timer = null
         startRepeatingTask()
+
+        return START_STICKY
     }
 
     private fun startRepeatingTask() {
-        timer.schedule(object : TimerTask() {
+        val intervalMillis = intervalSeconds * 1000L
+
+        timer?.schedule(object : TimerTask() {
             override fun run() {
                 collectAndSendData()
             }
-        }, 0, 5000)
+        }, 0, intervalMillis)
+
+        Log.d("SERVICE", "Repeating task started with ${intervalSeconds}s interval")
     }
 
     private fun collectAndSendData() {
@@ -425,7 +448,7 @@ class DataCollectionService : Service() {
 
     override fun onDestroy() {
         super.onDestroy()
-        timer.cancel()
+        timer?.cancel()
         locationManager.unregisterGnssMeasurementsCallback(gnssCallback)
         Log.i("SERVICE", "DataCollectionService stopped")
     }
