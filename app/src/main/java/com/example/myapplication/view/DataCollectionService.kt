@@ -363,7 +363,6 @@ class DataCollectionService : Service() {
             clockData.put("timeNanos", clock?.timeNanos ?: "")
             clockData.put("fullBiasNanos", clock?.fullBiasNanos ?: "")
             clockData.put("biasNanos", clock?.biasNanos?.takeIf { !it.isNaN() } ?: 0)
-            Log.d("CLOCK", "biasNanos=${clock?.biasNanos}")//todo
 
             clockData.put("leapSecond", clock?.leapSecond ?: "")
             data.put("clock", clockData)

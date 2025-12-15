@@ -4,6 +4,7 @@ import android.Manifest
 import android.annotation.SuppressLint
 import android.content.Intent
 import android.content.pm.PackageManager
+import android.graphics.Canvas
 import android.graphics.Color
 import android.graphics.drawable.BitmapDrawable
 import android.location.Location
@@ -12,6 +13,8 @@ import android.os.Bundle
 import android.util.Log
 import android.view.View
 import android.view.WindowManager
+import android.widget.ArrayAdapter
+import android.widget.Spinner
 import android.widget.Toast
 import androidx.appcompat.app.AppCompatActivity
 import androidx.core.app.ActivityCompat
@@ -32,11 +35,17 @@ import com.google.android.gms.maps.model.CameraPosition
 import com.google.android.gms.maps.model.LatLng
 import com.google.android.gms.maps.model.MarkerOptions
 import androidx.core.graphics.scale
+import com.example.myapplication.model.LocationMarkerData
 import com.example.myapplication.repository.SensorRepository
+import com.google.android.gms.maps.model.BitmapDescriptor
+import com.google.android.gms.maps.model.Circle
+import com.google.android.gms.maps.model.CircleOptions
 import com.google.android.gms.maps.model.Marker
+import org.json.JSONObject
 import java.text.SimpleDateFormat
 import java.util.Date
 import java.util.Locale
+import androidx.core.graphics.createBitmap
 
 class MainActivity : AppCompatActivity(), OnMapReadyCallback {
 
@@ -45,8 +54,32 @@ class MainActivity : AppCompatActivity(), OnMapReadyCallback {
     private lateinit var fusedLocationClient: FusedLocationProviderClient
     lateinit var mainActivityViewModel: MainActivityViewModel
     private var currentSelectedMarker: Marker? = null
-    var serverMarker: Marker? = null
 
+    private val locationMarkers = mutableMapOf<String, Pair<Marker?, Circle?>>()
+    private val locationDataList = mutableListOf<LocationMarkerData>()
+    private lateinit var locationSpinner: Spinner
+    private var isMapReady = false
+
+    private val locationColors = mapOf(
+        "fused_location" to Color.rgb(255, 0, 0),      // Red
+        "wifi_location" to Color.rgb(255, 165, 0),     // Orange
+        "network_location" to Color.rgb(255, 255, 0),  // Yellow
+        "gnss_location" to Color.rgb(0, 128, 0),       // Green
+        "dead_rocking_location" to Color.rgb(0, 0, 255), // Blue
+        "bts_location" to Color.rgb(75, 0, 130),      // Indigo
+        "gps_location" to Color.rgb(238, 130, 238),    // Violet
+        "default" to Color.GRAY                         // Fallback
+    )
+
+    private val locationPinResources = mapOf(
+        "fused_location" to R.mipmap.pin1,
+        "wifi_location" to R.mipmap.pin2,
+        "network_Location" to R.mipmap.pin3,
+        "gnss_location" to R.mipmap.pin4,
+        "dead_rocking_location" to R.mipmap.pin5,
+        "bts_location" to R.mipmap.pin6,
+        "gps_location" to R.mipmap.pin7
+    )
 
     private val permissionList = arrayOf(
         Manifest.permission.ACCESS_FINE_LOCATION,
@@ -68,6 +101,7 @@ class MainActivity : AppCompatActivity(), OnMapReadyCallback {
 
         // Initialize repository
         SensorRepository.initialize(this)
+        mainActivityViewModel = ViewModelProvider(this)[MainActivityViewModel::class.java]
 
         // Start sensors and observe
         startObservingSensors()
@@ -75,26 +109,23 @@ class MainActivity : AppCompatActivity(), OnMapReadyCallback {
         // Display sensor info
         displaySensorInfo()
 
-        mainActivityViewModel = ViewModelProvider(this)[MainActivityViewModel::class.java]
-
         mainActivityViewModel.getUserResponse().observe(this) { response ->
             try {
                 if (response.getString("status") == "success") {
                     val data = response.getJSONObject("data")
-                    val lat = data.getDouble("latitude")
-                    val lon = data.getDouble("longitude")
 
-                    updateMarker(lat, lon)
-//                    SimpleDateFormat("HH:mm:ss", Locale.getDefault())
-//                    .format(Date(requestSentTime))
-                    binding.txtLog.text =
-                        response.toString() + " \nFormatted Time: " + SimpleDateFormat(
-                            "HH:mm:ss",
-                            Locale.getDefault()
-                        )
-                            .format(Date(response.getLong("request_time"))) + "\nTime in millis: " + response.getLong(
-                            "request_time"
-                        )
+                    parseAllLocationsDynamically(data)
+                    if (isMapReady) {
+                        displayAllLocations()
+                    }
+                    setupLocationSpinner()
+
+                    binding.txtLog.text = "Formatted Time: " + SimpleDateFormat(
+                        "HH:mm:ss",
+                        Locale.getDefault()
+                    ).format(Date(response.getLong("request_time"))) + "\nTime in millis: " + response.getLong(
+                        "request_time"
+                    )
                 }
             } catch (e: Exception) {
                 Log.e("MAP_ERROR", "Error parsing server response", e)
@@ -109,26 +140,193 @@ class MainActivity : AppCompatActivity(), OnMapReadyCallback {
         setupUi()
     }
 
+    private fun parseAllLocationsDynamically(data: JSONObject) {
+        locationDataList.clear()
 
-    fun updateMarker(lat: Double, lon: Double) {
-        val serverLocation = LatLng(lat, lon)
+        val keys = data.keys()
+        while (keys.hasNext()) {
+            val key = keys.next()
 
-        val bitmapdraw = resources.getDrawable(R.mipmap.pin) as BitmapDrawable
-        val b = bitmapdraw.bitmap
-        val smallMarker = b.scale(60, 100, false)
+            if (key.endsWith("_location") || key == "gnss_location" ||
+                key == "dead_rocking_location"
+            ) {
+                try {
+                    val locationObj = data.getJSONObject(key)
 
-//        serverMarker.position(serverLocation)
-//        mMap.clear()
-//        mMap.animateCamera(CameraUpdateFactory.newLatLngZoom(serverLocation, 15f))
-//        mMap.addMarker(serverMarker)
-        serverMarker?.remove()
+                    if (locationObj.has("latitude") && locationObj.has("longitude")) {
+                        val lat = locationObj.optDouble("latitude", Double.NaN)
+                        val lon = locationObj.optDouble("longitude", Double.NaN)
 
-        serverMarker = mMap.addMarker(
+                        // Validate coordinates
+                        if (!lat.isNaN() && !lon.isNaN() &&
+                            lat != 0.0 && lon != 0.0
+                        ) {
+
+                            val accuracy = locationObj.optDouble("accuracy", 0.0)
+                            val color = locationColors[key] ?: locationColors["default"]!!
+
+                            val readableName = formatLocationName(key)
+
+                            locationDataList.add(
+                                LocationMarkerData(
+                                    name = readableName,
+                                    latitude = lat,
+                                    longitude = lon,
+                                    accuracy = accuracy,
+                                    color = color
+                                )
+                            )
+
+                            Log.d("LOCATION_PARSER", "Added location: $readableName ($lat, $lon)")
+                        }
+                    }
+                } catch (e: Exception) {
+                    Log.e("LOCATION_PARSER", "Error parsing location key: $key", e)
+                }
+            }
+        }
+
+        Log.d("LOCATION_PARSER", "Total locations parsed: ${locationDataList.size}")
+    }
+
+    private fun formatLocationName(key: String): String {
+        return key
+            .replace("_location", "")
+            .replace("_", " ")
+            .split(" ")
+            .joinToString(" ") { word ->
+                word.replaceFirstChar {
+                    if (it.isLowerCase()) it.titlecase(Locale.getDefault())
+                    else it.toString()
+                }
+            } + " Location"
+    }
+
+    private fun displayAllLocations() {
+        if (!isMapReady) return
+
+        locationMarkers.values.forEach { (marker, circle) ->
+            marker?.remove()
+            circle?.remove()
+        }
+        locationMarkers.clear()
+
+        locationDataList.forEach { locationData ->
+            if (locationData.isVisible) {
+                addLocationMarker(locationData)
+            }
+        }
+
+        if (::locationSpinner.isInitialized) {
+            updateSpinner()
+        }
+    }
+
+    private fun addLocationMarker(locationData: LocationMarkerData) {
+        val position = LatLng(locationData.latitude, locationData.longitude)
+
+        val pinIcon = getCustomMarkerIcon(locationData.name, 100, 100)
+
+        val marker = mMap.addMarker(
             MarkerOptions()
-                .position(serverLocation)
-                .icon(BitmapDescriptorFactory.fromBitmap(smallMarker))
-        )!!
+                .position(position)
+                .title(locationData.name)
+                .snippet("Accuracy: ${locationData.accuracy.toInt()}m")
+                .icon(pinIcon)
+        )
 
+        // Create accuracy circle
+        val circle = mMap.addCircle(
+            CircleOptions()
+                .center(position)
+                .radius(locationData.accuracy)
+                .strokeColor(locationData.color)
+                .strokeWidth(2f)
+                .fillColor(
+                    Color.argb(
+                        30, Color.red(locationData.color),
+                        Color.green(locationData.color), Color.blue(locationData.color)
+                    )
+                )
+        )
+
+        locationMarkers[locationData.name] = Pair(marker, circle)
+    }
+
+    private fun getCustomMarkerIcon(
+        locationName: String,
+        width: Int,
+        height: Int
+    ): BitmapDescriptor {
+        val matchingKey = locationPinResources.keys.find { key ->
+            locationName.lowercase().contains(key.replace("_location", "").replace("_", " "))
+        }
+
+        val drawableId =
+            matchingKey?.let { locationPinResources[it] } ?: R.mipmap.pin
+
+        return try {
+            val drawable = ContextCompat.getDrawable(this, drawableId)
+
+            if (drawable is BitmapDrawable) {
+                val bitmap = drawable.bitmap
+                val scaledBitmap = bitmap.scale(width, height, false)
+                BitmapDescriptorFactory.fromBitmap(scaledBitmap)
+            } else {
+                val bitmap = createBitmap(width, height)
+                val canvas = Canvas(bitmap)
+                drawable?.setBounds(0, 0, canvas.width, canvas.height)
+                drawable?.draw(canvas)
+                BitmapDescriptorFactory.fromBitmap(bitmap)
+            }
+        } catch (e: Exception) {
+            Log.e("MARKER_ERROR", "Error loading custom marker", e)
+            BitmapDescriptorFactory.defaultMarker() // Fallback
+        }
+    }
+
+    private fun setupLocationSpinner() {
+        locationSpinner = binding.spinnerLocations
+
+        binding.btnToggleLocation.setOnClickListener {
+            val selectedPosition = locationSpinner.selectedItemPosition
+            if (selectedPosition in locationDataList.indices) {
+                val selectedLocation = locationDataList[selectedPosition]
+                selectedLocation.isVisible = !selectedLocation.isVisible
+
+                if (selectedLocation.isVisible) {
+                    addLocationMarker(selectedLocation)
+                    Toast.makeText(
+                        this,
+                        "${selectedLocation.name} نمایش داده شد",
+                        Toast.LENGTH_SHORT
+                    ).show()
+                } else {
+                    locationMarkers[selectedLocation.name]?.let { (marker, circle) ->
+                        marker?.remove()
+                        circle?.remove()
+                    }
+                    locationMarkers.remove(selectedLocation.name)
+                    Toast.makeText(this, "${selectedLocation.name} پنهان شد", Toast.LENGTH_SHORT)
+                        .show()
+                }
+                updateSpinner()
+            }
+        }
+    }
+
+    private fun updateSpinner() {
+        val locationNames = locationDataList.map {
+            "${it.name} (${if (it.isVisible) "نمایش" else "پنهان"})"
+        }
+
+        val adapter = ArrayAdapter(
+            this,
+            android.R.layout.simple_spinner_item,
+            locationNames
+        )
+        adapter.setDropDownViewResource(android.R.layout.simple_spinner_dropdown_item)
+        locationSpinner.adapter = adapter
     }
 
     private fun setupUi() {
@@ -136,20 +334,6 @@ class MainActivity : AppCompatActivity(), OnMapReadyCallback {
             if (isLocationPermissionGranted()) {
                 val interval = getValidatedInterval()
                 startService(interval)
-// updateMarker(35.7676216, 51.4247806)
-//                mainActivityViewModel.getUserResponse().observe(this) { response ->
-//                    try {
-//                        if (response.getString("status") == "success") {
-//                            val data = response.getJSONObject("data")
-//                            val lat = data.getDouble("latitude")
-//                            val lon = data.getDouble("longitude")
-//
-//                            updateMarker(lat, lon)
-//                        }
-//                    } catch (e: Exception) {
-//                        Log.e("MAP_ERROR", "Error parsing server response", e)
-//                    }
-//                }
                 centerMapOnCurrentLocation()
             } else {
                 checkPermission()
@@ -220,6 +404,8 @@ class MainActivity : AppCompatActivity(), OnMapReadyCallback {
     @SuppressLint("MissingPermission")
     override fun onMapReady(googleMap: GoogleMap) {
         mMap = googleMap
+        isMapReady = true
+
         mMap.mapType = GoogleMap.MAP_TYPE_NORMAL
         mMap.uiSettings.isMyLocationButtonEnabled = false
 
@@ -228,6 +414,9 @@ class MainActivity : AppCompatActivity(), OnMapReadyCallback {
         mMap.animateCamera(CameraUpdateFactory.newCameraPosition(cameraPosition))
 
         mMap.isMyLocationEnabled = true
+        if (locationDataList.isNotEmpty()) {
+            displayAllLocations()
+        }
     }
 
     @SuppressLint("MissingPermission")
@@ -332,7 +521,6 @@ class MainActivity : AppCompatActivity(), OnMapReadyCallback {
             }
         }
     }
-
 
     private fun displaySensorInfo() {
         SensorRepository.getAccelerometerInfo()?.let { info ->

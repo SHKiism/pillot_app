@@ -5,7 +5,6 @@ import androidx.lifecycle.MutableLiveData
 import androidx.lifecycle.ViewModel
 import com.example.myapplication.model.InfoModel
 import com.example.myapplication.repository.MainActivityRepository
-import org.json.JSONArray
 import org.json.JSONObject
 
 class MainActivityViewModel : ViewModel() {

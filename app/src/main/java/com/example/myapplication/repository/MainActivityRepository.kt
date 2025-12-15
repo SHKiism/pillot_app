@@ -29,30 +29,22 @@ object MainActivityRepository {
             ) {
                 Log.v("DEBUG onResponse", response.body().toString())
                 Log.e("DEBUG ERROR BODY", response.errorBody()?.string().toString())
-                val data = response.body()
-                if (data != null) {
-                    Log.d("DEBUG data", "Lat: ${data.data.latitude}, Lon: ${data.data.longitude}")
+                val body = response.body()
+                if (body == null) {
+                    Log.e("DEBUG", "Response body is null")
+                    return
+                }
 
-                    try {
-                        val json = JSONObject()
-                        json.put("status", data.status)
+                try {
+                    val json = JSONObject()
+                    json.put("status", body.status)
+                    json.put("data", JSONObject(body.data.toString()))
+                    json.put("request_time", requestTime)
 
-                        val dataObj = JSONObject()
-                        dataObj.put("latitude", data.data.latitude)
-                        dataObj.put("longitude", data.data.longitude)
-                        dataObj.put("accuracy", data.data.accuracy)
-                        dataObj.put("location_type", data.data.location_type)
+                    serviceSetterGetter.postValue(json)
 
-                        json.put("data", dataObj)
-                        json.put("request_time", requestTime)
-
-                        serviceSetterGetter.postValue(json)
-
-                    } catch (e: Exception) {
-                        Log.e("DEBUG error", "Error creating JSON", e)
-                    }
-                } else {
-                    Log.e("DEBUG error", "Response body is null")
+                } catch (e: Exception) {
+                    Log.e("DEBUG error", "Error creating JSON", e)
                 }
             }
         })
