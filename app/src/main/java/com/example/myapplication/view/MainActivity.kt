@@ -13,6 +13,7 @@ import android.os.Bundle
 import android.util.Log
 import android.view.View
 import android.view.WindowManager
+import android.widget.AdapterView
 import android.widget.ArrayAdapter
 import android.widget.Spinner
 import android.widget.Toast
@@ -60,6 +61,8 @@ class MainActivity : AppCompatActivity(), OnMapReadyCallback {
     private lateinit var locationSpinner: Spinner
     private var isMapReady = false
 
+    private lateinit var spinnerAdapter: ArrayAdapter<String>
+
     private val locationColors = mapOf(
         "fused_location" to Color.rgb(255, 0, 0),      // Red
         "wifi_location" to Color.rgb(255, 165, 0),     // Orange
@@ -99,14 +102,10 @@ class MainActivity : AppCompatActivity(), OnMapReadyCallback {
         window.addFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)
         window.statusBarColor = Color.BLACK
 
-        // Initialize repository
         SensorRepository.initialize(this)
         mainActivityViewModel = ViewModelProvider(this)[MainActivityViewModel::class.java]
 
-        // Start sensors and observe
         startObservingSensors()
-
-        // Display sensor info
         displaySensorInfo()
 
         mainActivityViewModel.getUserResponse().observe(this) { response ->
@@ -118,7 +117,6 @@ class MainActivity : AppCompatActivity(), OnMapReadyCallback {
                     if (isMapReady) {
                         displayAllLocations()
                     }
-                    setupLocationSpinner()
 
                     binding.txtLog.text = "Formatted Time: " + SimpleDateFormat(
                         "HH:mm:ss",
@@ -137,56 +135,67 @@ class MainActivity : AppCompatActivity(), OnMapReadyCallback {
 
         setupMap()
         checkPermission()
+        setupLocationSpinner()
         setupUi()
     }
 
     private fun parseAllLocationsDynamically(data: JSONObject) {
-        locationDataList.clear()
+        runOnUiThread {
+            val existingVisibility = locationDataList.associate { it.name to it.isVisible }
 
-        val keys = data.keys()
-        while (keys.hasNext()) {
-            val key = keys.next()
+            locationDataList.clear()
 
-            if (key.endsWith("_location") || key == "gnss_location" ||
-                key == "dead_rocking_location"
-            ) {
-                try {
-                    val locationObj = data.getJSONObject(key)
+            val keys = data.keys()
+            while (keys.hasNext()) {
+                val key = keys.next()
 
-                    if (locationObj.has("latitude") && locationObj.has("longitude")) {
-                        val lat = locationObj.optDouble("latitude", Double.NaN)
-                        val lon = locationObj.optDouble("longitude", Double.NaN)
+                if (key.endsWith("_location") || key == "gnss_location" ||
+                    key == "dead_rocking_location"
+                ) {
+                    try {
+                        val locationObj = data.getJSONObject(key)
 
-                        // Validate coordinates
-                        if (!lat.isNaN() && !lon.isNaN() &&
-                            lat != 0.0 && lon != 0.0
-                        ) {
+                        if (locationObj.has("latitude") && locationObj.has("longitude")) {
+                            val lat = locationObj.optDouble("latitude", Double.NaN)
+                            val lon = locationObj.optDouble("longitude", Double.NaN)
 
-                            val accuracy = locationObj.optDouble("accuracy", 0.0)
-                            val color = locationColors[key] ?: locationColors["default"]!!
+                            // Validate coordinates
+                            if (!lat.isNaN() && !lon.isNaN() &&
+                                lat != 0.0 && lon != 0.0
+                            ) {
+                                val accuracy = locationObj.optDouble("accuracy", 0.0)
+                                val color = locationColors[key] ?: locationColors["default"]!!
+                                val readableName = formatLocationName(key)
 
-                            val readableName = formatLocationName(key)
+                                val isVisible = existingVisibility[readableName] ?: true
 
-                            locationDataList.add(
-                                LocationMarkerData(
-                                    name = readableName,
-                                    latitude = lat,
-                                    longitude = lon,
-                                    accuracy = accuracy,
-                                    color = color
+                                locationDataList.add(
+                                    LocationMarkerData(
+                                        name = readableName,
+                                        latitude = lat,
+                                        longitude = lon,
+                                        accuracy = accuracy,
+                                        color = color,
+                                        isVisible = isVisible
+                                    )
                                 )
-                            )
 
-                            Log.d("LOCATION_PARSER", "Added location: $readableName ($lat, $lon)")
+                                Log.d(
+                                    "LOCATION_PARSER",
+                                    "Added location: $readableName ($lat, $lon)"
+                                )
+                            }
                         }
+                    } catch (e: Exception) {
+                        Log.e("LOCATION_PARSER", "Error parsing location key: $key", e)
                     }
-                } catch (e: Exception) {
-                    Log.e("LOCATION_PARSER", "Error parsing location key: $key", e)
                 }
             }
-        }
 
-        Log.d("LOCATION_PARSER", "Total locations parsed: ${locationDataList.size}")
+            updateSpinnerData()
+
+            Log.d("LOCATION_PARSER", "Total locations parsed: ${locationDataList.size}")
+        }
     }
 
     private fun formatLocationName(key: String): String {
@@ -215,10 +224,6 @@ class MainActivity : AppCompatActivity(), OnMapReadyCallback {
             if (locationData.isVisible) {
                 addLocationMarker(locationData)
             }
-        }
-
-        if (::locationSpinner.isInitialized) {
-            updateSpinner()
         }
     }
 
@@ -288,45 +293,68 @@ class MainActivity : AppCompatActivity(), OnMapReadyCallback {
     private fun setupLocationSpinner() {
         locationSpinner = binding.spinnerLocations
 
-        binding.btnToggleLocation.setOnClickListener {
-            val selectedPosition = locationSpinner.selectedItemPosition
-            if (selectedPosition in locationDataList.indices) {
-                val selectedLocation = locationDataList[selectedPosition]
-                selectedLocation.isVisible = !selectedLocation.isVisible
+        spinnerAdapter = ArrayAdapter(
+            this,
+            android.R.layout.simple_spinner_item,
+            mutableListOf<String>()
+        )
+        spinnerAdapter.setDropDownViewResource(android.R.layout.simple_spinner_dropdown_item)
+        locationSpinner.adapter = spinnerAdapter
 
-                if (selectedLocation.isVisible) {
-                    addLocationMarker(selectedLocation)
-                    Toast.makeText(
-                        this,
-                        "${selectedLocation.name} نمایش داده شد",
-                        Toast.LENGTH_SHORT
-                    ).show()
-                } else {
-                    locationMarkers[selectedLocation.name]?.let { (marker, circle) ->
-                        marker?.remove()
-                        circle?.remove()
-                    }
-                    locationMarkers.remove(selectedLocation.name)
-                    Toast.makeText(this, "${selectedLocation.name} پنهان شد", Toast.LENGTH_SHORT)
-                        .show()
+        locationSpinner.onItemSelectedListener = object : AdapterView.OnItemSelectedListener {
+            override fun onItemSelected(
+                parent: AdapterView<*>?,
+                view: View?,
+                position: Int,
+                id: Long
+            ) {
+
+                if (position in locationDataList.indices) {
+                    toggleLocationVisibility(position)
                 }
-                updateSpinner()
+            }
+
+            override fun onNothingSelected(parent: AdapterView<*>?) {
             }
         }
     }
 
-    private fun updateSpinner() {
-        val locationNames = locationDataList.map {
-            "${it.name} (${if (it.isVisible) "نمایش" else "پنهان"})"
+    private fun toggleLocationVisibility(position: Int) {
+        val selectedLocation = locationDataList[position]
+        selectedLocation.isVisible = !selectedLocation.isVisible
+
+        if (selectedLocation.isVisible) {
+            addLocationMarker(selectedLocation)
+            Toast.makeText(
+                this,
+                "${selectedLocation.name} نمایش داده شد",
+                Toast.LENGTH_SHORT
+            ).show()
+        } else {
+            locationMarkers[selectedLocation.name]?.let { (marker, circle) ->
+                marker?.remove()
+                circle?.remove()
+            }
+            locationMarkers.remove(selectedLocation.name)
+            Toast.makeText(
+                this,
+                "${selectedLocation.name} پنهان شد",
+                Toast.LENGTH_SHORT
+            ).show()
         }
 
-        val adapter = ArrayAdapter(
-            this,
-            android.R.layout.simple_spinner_item,
-            locationNames
-        )
-        adapter.setDropDownViewResource(android.R.layout.simple_spinner_dropdown_item)
-        locationSpinner.adapter = adapter
+        updateSpinnerData()
+    }
+
+
+    private fun updateSpinnerData() {
+        spinnerAdapter.clear()
+
+        val locationNames = locationDataList.map {
+            "${it.name} (${if (it.isVisible) "✓" else "✗"})"
+        }
+        spinnerAdapter.addAll(locationNames)
+        spinnerAdapter.notifyDataSetChanged()
     }
 
     private fun setupUi() {

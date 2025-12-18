@@ -1,10 +1,12 @@
 package com.example.myapplication.repository
 
 import android.util.Log
+import androidx.lifecycle.LiveData
 import androidx.lifecycle.MutableLiveData
 import com.example.myapplication.model.ApiResponse
 import com.example.myapplication.model.InfoModel
 import com.example.myapplication.retrofit.RetrofitClient
+import com.example.myapplication.utils.SingleLiveEvent
 import org.json.JSONObject
 import retrofit2.Call
 import retrofit2.Callback
@@ -12,8 +14,8 @@ import retrofit2.Response
 
 object MainActivityRepository {
 
-    val serviceSetterGetter = MutableLiveData<JSONObject>()
-    fun sendInfoApiCall(inf: InfoModel): MutableLiveData<JSONObject> {
+    val serviceSetterGetter = SingleLiveEvent<JSONObject>()
+    fun sendInfoApiCall(inf: InfoModel): SingleLiveEvent<JSONObject> {
 
         val call = RetrofitClient.apiInterface.sendInfo(inf)
         val requestTime = System.currentTimeMillis()
