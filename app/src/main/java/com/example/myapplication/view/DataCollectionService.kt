@@ -6,6 +6,7 @@ import android.app.Notification
 import android.app.NotificationChannel
 import android.app.NotificationManager
 import android.app.Service
+import android.content.Context
 import android.content.Intent
 import android.location.GnssClock
 import android.location.GnssMeasurementsEvent
@@ -14,9 +15,8 @@ import android.location.LocationManager
 import android.net.wifi.WifiManager
 import android.os.*
 import android.provider.Settings
-import android.telephony.CellInfoGsm
-import android.telephony.CellInfoLte
-import android.telephony.CellInfoWcdma
+import android.telephony.CellInfo
+import android.telephony.SubscriptionManager
 import android.telephony.TelephonyManager
 import android.util.Log
 import androidx.annotation.RequiresApi
@@ -55,7 +55,6 @@ class DataCollectionService : Service() {
 
     override fun onBind(intent: Intent?) = null
 
-    @RequiresApi(Build.VERSION_CODES.O)
     @RequiresPermission(Manifest.permission.ACCESS_FINE_LOCATION)
     override fun onCreate() {
         super.onCreate()
@@ -73,7 +72,7 @@ class DataCollectionService : Service() {
         )
         SensorRepository.initialize(this)
 
-// Start all sensors
+        // Start all sensors
         SensorRepository.startAccelerometerSensor()
         SensorRepository.startGyroscopeSensor()
         SensorRepository.startMagneticFieldSensor()
@@ -117,7 +116,7 @@ class DataCollectionService : Service() {
         try {
             val fusedLoc = getLocationInfo()
             val providersLoc = getProvidersLocationInfo()
-            val cellInfo = getCellInfo()
+            val cellInfo = getCellTowerInfoDetailed()
             val wifiInfo = getWifiInfo()
             val deviceInfo = getDeviceInfo()
             val gnssInfo = getGnssInfo()
@@ -196,111 +195,107 @@ class DataCollectionService : Service() {
     }
 
     @SuppressLint("MissingPermission")
-    private fun getCellInfo(): JSONObject {
-        val tele = getSystemService(TELEPHONY_SERVICE) as TelephonyManager
-        val json =
-            JSONObject()
-        json.put("networkOperatorName", tele.networkOperatorName ?: "")
-        json.put("networkOperator", tele.networkOperator ?: "")
-        json.put("simOperatorName", tele.simOperatorName ?: "")
-        json.put("isNetworkRoaming", tele.isNetworkRoaming ?: "")
-        json.put("networkTypeName", tele.networkType ?: "")
-        json.put("simState", tele.simState ?: "")
-        json.put("phoneType", tele.phoneType ?: "")
-        json.put("simOperator", tele.simOperator ?: "")
-        json.put("simCountryIso", tele.simCountryIso ?: "")
-        // json.put("simSerialNumber",tele.simSerialNumber ?: "")
-        // json.put("subscriberId",tele.subscriberId ?: "")
-        json.put("callState", tele.callState ?: "")
-        json.put("dataActivity", tele.dataActivity ?: "")
-        json.put("dataState", tele.dataState ?: "")
-        json.put("deviceSoftwareVersion", tele.deviceSoftwareVersion ?: "")
-        // json.put("dataSline1Numbertate",tele.line1Number ?: "")
-        // json.put("imei", tele.imei ?: "")
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
-            json.put("callStateString", tele.callStateForSubscription ?: "")
-            json.put("MccMnc", tele.carrierIdFromSimMccMnc ?: "")
-            // json.put("mnc",tele.carrierIdFromSimMccMnc ?: "")
-            json.put("networkType", tele.dataNetworkType ?: "")
-            json.put("gsmSignalStrength", tele.signalStrength?.gsmSignalStrength ?: "")
-            json.put("cellSignalStrengths", tele.signalStrength?.cellSignalStrengths ?: "")
-            json.put("signalStrength", tele.signalStrength ?: "")
+    private fun getCellTowerInfoDetailed(): JSONObject {
+        val tm = getSystemService(Context.TELEPHONY_SERVICE) as TelephonyManager
+        val rootJson = JSONObject()
+        val cellInfoArray = JSONArray()
+
+        val sm = getSystemService(Context.TELEPHONY_SUBSCRIPTION_SERVICE) as SubscriptionManager
+        val activeSubs = sm.activeSubscriptionInfoList
+        if (activeSubs != null && activeSubs.isNotEmpty()) {
+            activeSubs.forEach { sub ->
+                val tmSub = tm.createForSubscriptionId(sub.subscriptionId)
+                tmSub.allCellInfo?.forEach { info ->
+                    val cell = processCell(info)
+                    cell.put("simSlot", sub.simSlotIndex)
+                    cellInfoArray.put(cell)
+                }
+            }
+        } else {
+            tm.allCellInfo?.forEach { info -> cellInfoArray.put(processCell(info)) }
         }
-//        json.put("allCellInfo_Unwrapped", tele.allCellInfo?.toString() ?: "")
 
-        val jsonArray = JSONArray()
-        tele.allCellInfo?.forEach { cell ->
-            val c = JSONObject()
-            c.put("registered", cell.isRegistered)
-            c.put("type", cell::class.simpleName)
+        rootJson.put("allCellInfo", cellInfoArray)
+        rootJson.put("networkOperatorName", tm.networkOperatorName)
+        return rootJson
+    }
 
-            when (cell) {
-                is CellInfoLte -> {
-                    val id = cell.cellIdentity
-                    val ss = cell.cellSignalStrength
+    private fun processCell(info: CellInfo): JSONObject {
+        val cell = JSONObject()
+        cell.put("type", info.javaClass.simpleName)
+        cell.put("registered", info.isRegistered)
 
-                    c.put("ci", id.ci)
-                    c.put("pci", id.pci)
-                    c.put("tac", id.tac)
-                    c.put("earfcn", id.earfcn)
-                    c.put("mcc", id.mcc)
-                    c.put("mnc", id.mnc)
-                    c.put("dbm", ss.dbm)
-                    c.put("level", ss.level)
-                    if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.P) {
-                        c.put("bandwidth", id.bandwidth)
-                        c.put("rssnr", ss.rssnr)
-                        c.put("rsrp", ss.rsrp)
-                        c.put("rsrq", ss.rsrq)
-                        c.put("alphaLong", id.operatorAlphaLong)
-                        c.put("alphaShort", id.operatorAlphaShort)
+        try {
+            val identity = info.javaClass.getMethod("getCellIdentity").invoke(info)
+            val signal = info.javaClass.getMethod("getCellSignalStrength").invoke(info)
+
+            val idFields = listOf(
+                "getCi",
+                "getAdditionalPlmns",
+                "getBands",
+                "getBsic",
+                "getCid",
+                "getPci",
+                "getTac",
+                "getLac",
+                "getEarfcn",
+                "getUarfcn",
+                "getArfcn",
+                "getNci",
+                "getNrarfcn",
+                "getMccString",
+                "getMncString",
+                "getMcc",
+                "getMnc"
+            )
+            idFields.forEach { name ->
+                try {
+                    val value = identity?.javaClass?.getMethod(name)?.invoke(identity)
+                    if (value != null) {
+                        val key = name.removePrefix("get").lowercase()
+
+                        val jsonValue = when (value) {
+                            is IntArray -> JSONArray(value.toList())      // getBands()
+                            is Set<*> -> JSONArray(value.toList())        // getAdditionalPlmns()
+                            else -> value
+                        }
+
+                        cell.put(key, jsonValue)
                     }
-                }
-
-                is CellInfoWcdma -> {
-                    val id = cell.cellIdentity
-                    val ss = cell.cellSignalStrength
-
-                    c.put("lac", id.lac)
-                    c.put("cid", id.cid)
-                    c.put("psc", id.psc)
-                    c.put("uarfcn", id.uarfcn)
-                    c.put("mcc", id.mcc)
-                    c.put("mnc", id.mnc)
-
-                    c.put("dbm", ss.dbm)
-                    c.put("level", ss.level)
-                    c.put("asuLevel", ss.asuLevel)
-                    if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.P) {
-                        c.put("alphaLong", id.operatorAlphaLong)
-                        c.put("alphaShort", id.operatorAlphaShort)
-                    }
-                }
-
-                is CellInfoGsm -> {
-                    val id = cell.cellIdentity
-                    val ss = cell.cellSignalStrength
-
-                    c.put("lac", id.lac)
-                    c.put("cid", id.cid)
-                    c.put("arfcn", id.arfcn)
-                    c.put("bsic", id.bsic)
-                    c.put("mcc", id.mcc)
-                    c.put("mnc", id.mnc)
-
-                    c.put("dbm", ss.dbm)
-                    c.put("level", ss.level)
+                } catch (e: Exception) {
                 }
             }
 
-            jsonArray.put(c)
+            val sigFields = listOf(
+                "getDbm",
+                "getCqiTableIndex",
+                "getRsrp",
+                "getRsrq",
+                "getRssnr",
+                "getCsiRsrp",
+                "getSsRsrp",
+                "getTimingAdvance",
+                "getRssi",
+                "getRscp",
+                "getEcno",
+                "getCqi",
+                "getAsuLevel",
+                "getLevel"
+            )
+            sigFields.forEach { name ->
+                try {
+                    val value = signal?.javaClass?.getMethod(name)?.invoke(signal)
+                    if (value != null) {
+                        val key = name.removePrefix("get").lowercase()
+                        cell.put(key, value)
+                    }
+                } catch (e: Exception) {
+                }
+            }
+        } catch (e: Exception) {
         }
 
-        json.put("allCellInfo", jsonArray)
-
-//        json.put("cellLocation", tele.cellLocation.toString() ?: "")
-
-        return json
+        return cell
     }
 
     private fun getWifiInfo(): JSONObject {
