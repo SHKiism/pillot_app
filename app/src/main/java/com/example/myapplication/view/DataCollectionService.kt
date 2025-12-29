@@ -78,6 +78,7 @@ class DataCollectionService : Service() {
         SensorRepository.startMagneticFieldSensor()
         SensorRepository.startPressureSensor()
         SensorRepository.startGravitySensor()
+        SensorRepository.startLinearAccelerationSensor()
     }
 
 
@@ -246,7 +247,9 @@ class DataCollectionService : Service() {
                 "getMccString",
                 "getMncString",
                 "getMcc",
-                "getMnc"
+                "getMnc",
+                "getOperatorAlphaLong",
+                "getOperatorAlphaShort"
             )
             idFields.forEach { name ->
                 try {
@@ -263,6 +266,7 @@ class DataCollectionService : Service() {
                         cell.put(key, jsonValue)
                     }
                 } catch (e: Exception) {
+                    print(e)
                 }
             }
 
@@ -290,9 +294,11 @@ class DataCollectionService : Service() {
                         cell.put(key, value)
                     }
                 } catch (e: Exception) {
+                    print(e)
                 }
             }
         } catch (e: Exception) {
+            print(e)
         }
 
         return cell
@@ -367,42 +373,50 @@ class DataCollectionService : Service() {
             for (m in event.measurements.toList()) {
                 val j = JSONObject()
                 j.put("constellationType", m.constellationType ?: "")
-                j.put("cn0DbHz", m.cn0DbHz ?: "")
+                j.put("cn0DbHz", m.cn0DbHz.takeIf { !it.isNaN() } ?: 0)
                 j.put("svid", m.svid ?: "")
                 j.put("receivedSvTimeNanos", m.receivedSvTimeNanos ?: "")
-                j.put("carrierFrequencyHz", m.carrierFrequencyHz ?: "")
+                j.put("carrierFrequencyHz", m.carrierFrequencyHz.takeIf { !it.isNaN() } ?: 0)
                 j.put("multipathIndicator", m.multipathIndicator ?: "")
-                j.put("pseudorangeRateMetersPerSecond", m.pseudorangeRateMetersPerSecond ?: "")
-                j.put("accumulatedDeltaRangeMeters", m.accumulatedDeltaRangeMeters ?: "")
+                j.put(
+                    "pseudorangeRateMetersPerSecond",
+                    m.pseudorangeRateMetersPerSecond.takeIf { !it.isNaN() } ?: 0)
+                j.put(
+                    "accumulatedDeltaRangeMeters",
+                    m.accumulatedDeltaRangeMeters.takeIf { !it.isNaN() } ?: 0)
                 j.put("carrierPhase", m.carrierPhase.takeIf { !it.isNaN() } ?: 0)
                 j.put("accumulatedDeltaRangeState", m.accumulatedDeltaRangeState ?: "")
                 j.put("describeContents", m.describeContents() ?: "")
                 j.put(
                     "accumulatedDeltaRangeUncertaintyMeters",
-                    m.accumulatedDeltaRangeUncertaintyMeters ?: ""
+                    m.accumulatedDeltaRangeUncertaintyMeters.takeIf { !it.isNaN() } ?: 0
                 )
-                j.put("timeOffsetNanos", m.timeOffsetNanos ?: "")
+                j.put("timeOffsetNanos", m.timeOffsetNanos.takeIf { !it.isNaN() } ?: 0)
                 j.put("state", m.state ?: "")
                 j.put("snrInDb", m.snrInDb.takeIf { !it.isNaN() } ?: 0)
                 j.put("receivedSvTimeUncertaintyNanos", m.receivedSvTimeUncertaintyNanos ?: "")
                 if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
-                    j.put("automaticGainControlLevelDb", m.automaticGainControlLevelDb ?: "")
+                    j.put(
+                        "automaticGainControlLevelDb",
+                        m.automaticGainControlLevelDb.takeIf { !it.isNaN() } ?: 0)
                 }
                 if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) {
                     j.put(
                         "satelliteInterSignalBiasUncertaintyNanos",
-                        m.satelliteInterSignalBiasUncertaintyNanos ?: ""
+                        m.satelliteInterSignalBiasUncertaintyNanos.takeIf { !it.isNaN() } ?: 0
                     )
                     j.put(
                         "satelliteInterSignalBiasNanos",
-                        m.satelliteInterSignalBiasNanos ?: ""
+                        m.satelliteInterSignalBiasNanos.takeIf { !it.isNaN() } ?: 0
                     )
                     j.put(
                         "fullInterSignalBiasUncertaintyNanos",
-                        m.fullInterSignalBiasUncertaintyNanos ?: ""
+                        m.fullInterSignalBiasUncertaintyNanos.takeIf { !it.isNaN() } ?: 0
                     )
-                    j.put("fullInterSignalBiasNanos", m.fullInterSignalBiasNanos ?: "")
-                    j.put("basebandCn0DbHz", m.basebandCn0DbHz ?: "")
+                    j.put(
+                        "fullInterSignalBiasNanos",
+                        m.fullInterSignalBiasNanos.takeIf { !it.isNaN() } ?: 0)
+                    j.put("basebandCn0DbHz", m.basebandCn0DbHz.takeIf { !it.isNaN() } ?: 0)
                 }
                 if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
                     j.put("codeType", m.codeType ?: "")

@@ -541,6 +541,15 @@ class MainActivity : AppCompatActivity(), OnMapReadyCallback {
             }
         }
 
+        // Start and observe LinearAcceleration
+        SensorRepository.startLinearAccelerationSensor().observe(this) { data ->
+            data?.let {
+                if (it.isAvailable) {
+                    println("LinearAcceleration - X: ${it.values[0]}, Y: ${it.values[1]}, Z: ${it.values[2]}")
+                }
+            }
+        }
+
         // Get all available sensors
         SensorRepository.getAllAvailableSensors().observe(this) { sensors ->
             println("Total sensors available: ${sensors.size}")
@@ -585,6 +594,14 @@ class MainActivity : AppCompatActivity(), OnMapReadyCallback {
 
         SensorRepository.getGravityInfo()?.let { info ->
             println("Gravity Info:")
+            println("  Vendor: ${info.vendor}")
+            println("  Max Range: ${info.maxRange}")
+            println("  Resolution: ${info.resolution}")
+            println("  Power: ${info.power} mA")
+        }
+
+        SensorRepository.getLinearAccelerationInfo()?.let { info ->
+            println("LinearAcceleration Info:")
             println("  Vendor: ${info.vendor}")
             println("  Max Range: ${info.maxRange}")
             println("  Resolution: ${info.resolution}")

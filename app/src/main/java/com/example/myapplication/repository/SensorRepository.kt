@@ -27,6 +27,7 @@ object SensorRepository {
     private val magneticFieldLiveData = MutableLiveData<SensorData>()
     private val pressureLiveData = MutableLiveData<SensorData>()
     private val gravityLiveData = MutableLiveData<SensorData>()
+    private val linearAccelerationLiveData = MutableLiveData<SensorData>()
     private val allSensorsLiveData = MutableLiveData<List<SensorInfo>>()
 
     // Sensors
@@ -35,6 +36,7 @@ object SensorRepository {
     private var magneticField: Sensor? = null
     private var pressure: Sensor? = null
     private var gravity: Sensor? = null
+    private var linearAcceleration: Sensor? = null
 
     // Listeners
     private val accelerometerListener = createSensorListener(accelerometerLiveData)
@@ -42,6 +44,7 @@ object SensorRepository {
     private val magneticFieldListener = createSensorListener(magneticFieldLiveData)
     private val pressureListener = createSensorListener(pressureLiveData)
     private val gravityListener = createSensorListener(gravityLiveData)
+    private val linearAccelerationListener = createSensorListener(linearAccelerationLiveData)
 
     fun initialize(context: Context) {
         sensorManager = context.getSystemService(Context.SENSOR_SERVICE) as SensorManager
@@ -51,6 +54,7 @@ object SensorRepository {
         magneticField = sensorManager.getDefaultSensor(Sensor.TYPE_MAGNETIC_FIELD)
         pressure = sensorManager.getDefaultSensor(Sensor.TYPE_PRESSURE)
         gravity = sensorManager.getDefaultSensor(Sensor.TYPE_GRAVITY)
+        linearAcceleration = sensorManager.getDefaultSensor(Sensor.TYPE_LINEAR_ACCELERATION)
     }
 
     private fun createSensorListener(liveData: MutableLiveData<SensorData>): SensorEventListener {
@@ -146,6 +150,17 @@ object SensorRepository {
         return gravityLiveData
     }
 
+    fun startLinearAccelerationSensor(): LiveData<SensorData> {
+        linearAcceleration?.let {
+            sensorManager.registerListener(
+                linearAccelerationListener,
+                it,
+                SensorManager.SENSOR_DELAY_NORMAL
+            )
+        }
+        return linearAccelerationLiveData
+    }
+
     val allSensorsResponse: MutableLiveData<List<SensorInfo>>
         get() = allSensorsLiveData
 
@@ -171,8 +186,8 @@ object SensorRepository {
     fun getMagnetometerInfo(): SensorInfo? = getSensorInfo(magneticField)
     fun getBarometerInfo(): SensorInfo? = getSensorInfo(pressure)
     fun getGravityInfo(): SensorInfo? = getSensorInfo(gravity)
+    fun getLinearAccelerationInfo(): SensorInfo? = getSensorInfo(linearAcceleration)
 
-    // NEW: Get all current sensor data as JSON
     fun getAllSensorsDataAsJson(): JSONObject {
         val json = JSONObject()
 
@@ -196,6 +211,10 @@ object SensorRepository {
             json.put("gravity", sensorDataToJson(it))
         } ?: json.put("gravity", JSONObject().apply { put("isAvailable", false) })
 
+        linearAccelerationLiveData.value?.let {
+            json.put("linearAcceleration", sensorDataToJson(it))
+        } ?: json.put("linearAcceleration", JSONObject().apply { put("isAvailable", false) })
+
         return json
     }
 
@@ -216,7 +235,8 @@ object SensorRepository {
             Sensor.TYPE_ACCELEROMETER,
             Sensor.TYPE_GYROSCOPE,
             Sensor.TYPE_MAGNETIC_FIELD,
-            Sensor.TYPE_GRAVITY -> {
+            Sensor.TYPE_GRAVITY,
+            Sensor.TYPE_LINEAR_ACCELERATION  -> {
                 json.put("x", data.values.getOrNull(0) ?: 0f)
                 json.put("y", data.values.getOrNull(1) ?: 0f)
                 json.put("z", data.values.getOrNull(2) ?: 0f)
@@ -267,6 +287,7 @@ object SensorRepository {
         sensorManager.unregisterListener(magneticFieldListener)
         sensorManager.unregisterListener(pressureListener)
         sensorManager.unregisterListener(gravityListener)
+        sensorManager.unregisterListener(linearAccelerationListener)
     }
 }
 
