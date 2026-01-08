@@ -28,6 +28,7 @@ object SensorRepository {
     private val pressureLiveData = MutableLiveData<SensorData>()
     private val gravityLiveData = MutableLiveData<SensorData>()
     private val linearAccelerationLiveData = MutableLiveData<SensorData>()
+    private val rotationVectorLiveData = MutableLiveData<SensorData>()
     private val allSensorsLiveData = MutableLiveData<List<SensorInfo>>()
 
     // Sensors
@@ -37,6 +38,7 @@ object SensorRepository {
     private var pressure: Sensor? = null
     private var gravity: Sensor? = null
     private var linearAcceleration: Sensor? = null
+    private var rotationVector: Sensor? = null
 
     // Listeners
     private val accelerometerListener = createSensorListener(accelerometerLiveData)
@@ -45,6 +47,7 @@ object SensorRepository {
     private val pressureListener = createSensorListener(pressureLiveData)
     private val gravityListener = createSensorListener(gravityLiveData)
     private val linearAccelerationListener = createSensorListener(linearAccelerationLiveData)
+    private val rotationVectorListener = createSensorListener(rotationVectorLiveData)
 
     fun initialize(context: Context) {
         sensorManager = context.getSystemService(Context.SENSOR_SERVICE) as SensorManager
@@ -55,6 +58,7 @@ object SensorRepository {
         pressure = sensorManager.getDefaultSensor(Sensor.TYPE_PRESSURE)
         gravity = sensorManager.getDefaultSensor(Sensor.TYPE_GRAVITY)
         linearAcceleration = sensorManager.getDefaultSensor(Sensor.TYPE_LINEAR_ACCELERATION)
+        rotationVector = sensorManager.getDefaultSensor(Sensor.TYPE_ROTATION_VECTOR)
     }
 
     private fun createSensorListener(liveData: MutableLiveData<SensorData>): SensorEventListener {
@@ -161,6 +165,17 @@ object SensorRepository {
         return linearAccelerationLiveData
     }
 
+    fun startRotationVectorSensor(): LiveData<SensorData> {
+        rotationVector?.let {
+            sensorManager.registerListener(
+                rotationVectorListener,
+                it,
+                SensorManager.SENSOR_DELAY_NORMAL
+            )
+        }
+        return rotationVectorLiveData
+    }
+
     val allSensorsResponse: MutableLiveData<List<SensorInfo>>
         get() = allSensorsLiveData
 
@@ -187,6 +202,7 @@ object SensorRepository {
     fun getBarometerInfo(): SensorInfo? = getSensorInfo(pressure)
     fun getGravityInfo(): SensorInfo? = getSensorInfo(gravity)
     fun getLinearAccelerationInfo(): SensorInfo? = getSensorInfo(linearAcceleration)
+    fun getRotationVectorInfo(): SensorInfo? = getSensorInfo(rotationVector)
 
     fun getAllSensorsDataAsJson(): JSONObject {
         val json = JSONObject()
@@ -215,6 +231,10 @@ object SensorRepository {
             json.put("linearAcceleration", sensorDataToJson(it))
         } ?: json.put("linearAcceleration", JSONObject().apply { put("isAvailable", false) })
 
+        rotationVectorLiveData.value?.let {
+            json.put("rotationVector", sensorDataToJson(it))
+        } ?: json.put("rotationVector", JSONObject().apply { put("isAvailable", false) })
+
         return json
     }
 
@@ -240,6 +260,14 @@ object SensorRepository {
                 json.put("x", data.values.getOrNull(0) ?: 0f)
                 json.put("y", data.values.getOrNull(1) ?: 0f)
                 json.put("z", data.values.getOrNull(2) ?: 0f)
+            }
+
+            Sensor.TYPE_ROTATION_VECTOR -> {
+                json.put("x", data.values.getOrNull(0) ?: 0f)
+                json.put("y", data.values.getOrNull(1) ?: 0f)
+                json.put("z", data.values.getOrNull(2) ?: 0f)
+                json.put("scalar", data.values.getOrNull(3) ?: 0f)
+                json.put("headingAccuracy", data.values.getOrNull(4) ?: 0f)
             }
 
             Sensor.TYPE_PRESSURE -> {
@@ -288,6 +316,7 @@ object SensorRepository {
         sensorManager.unregisterListener(pressureListener)
         sensorManager.unregisterListener(gravityListener)
         sensorManager.unregisterListener(linearAccelerationListener)
+        sensorManager.unregisterListener(rotationVectorListener)
     }
 }
 

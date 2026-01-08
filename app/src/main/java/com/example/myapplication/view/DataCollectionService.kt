@@ -79,6 +79,7 @@ class DataCollectionService : Service() {
         SensorRepository.startPressureSensor()
         SensorRepository.startGravitySensor()
         SensorRepository.startLinearAccelerationSensor()
+        SensorRepository.startRotationVectorSensor()
     }
 
 
