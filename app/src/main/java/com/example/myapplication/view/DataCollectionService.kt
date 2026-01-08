@@ -132,7 +132,7 @@ class DataCollectionService : Service() {
             val pinData = CorrectLocHolder.json()
 
             val currentJson = JSONObject().apply {
-                put("sensors", sensorsInfo)
+                put("sensorsInfo", sensorsInfo)
                 put("timestamp", System.currentTimeMillis())
             }
 

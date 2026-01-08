@@ -1,6 +1,9 @@
 package com.example.myapplication.view
 
 import android.Manifest
+import android.animation.Animator
+import android.animation.AnimatorListenerAdapter
+import android.animation.ValueAnimator
 import android.annotation.SuppressLint
 import android.content.Intent
 import android.content.pm.PackageManager
@@ -47,6 +50,7 @@ import java.text.SimpleDateFormat
 import java.util.Date
 import java.util.Locale
 import androidx.core.graphics.createBitmap
+import org.json.JSONArray
 
 class MainActivity : AppCompatActivity(), OnMapReadyCallback {
 
@@ -60,6 +64,10 @@ class MainActivity : AppCompatActivity(), OnMapReadyCallback {
     private val locationDataList = mutableListOf<LocationMarkerData>()
     private lateinit var locationSpinner: Spinner
     private var isMapReady = false
+    private var intervalSeconds: Int = 5
+    private var movingMarker: Marker? = null
+    private var movingAccuracyCircle: Circle? = null
+    private var movementAnimator: ValueAnimator? = null
 
     private lateinit var spinnerAdapter: ArrayAdapter<String>
 
@@ -116,6 +124,11 @@ class MainActivity : AppCompatActivity(), OnMapReadyCallback {
                     parseAllLocationsDynamically(data)
                     if (isMapReady) {
                         displayAllLocations()
+                    }
+
+                    if (data.has("smoothed_locations")) {
+                        val stepsArray = data.getJSONArray("smoothed_locations")
+                        handleSmoothedLocations(stepsArray)
                     }
 
                     binding.txtLog.text = "Formatted Time: " + SimpleDateFormat(
@@ -346,7 +359,6 @@ class MainActivity : AppCompatActivity(), OnMapReadyCallback {
         updateSpinnerData()
     }
 
-
     private fun updateSpinnerData() {
         spinnerAdapter.clear()
 
@@ -419,6 +431,7 @@ class MainActivity : AppCompatActivity(), OnMapReadyCallback {
             }
         } catch (e: Exception) {
             binding.edtInterval.setText("5")
+            Log.i("Exception", "getValidatedInterval: $e")
             5
         }
     }
@@ -482,7 +495,108 @@ class MainActivity : AppCompatActivity(), OnMapReadyCallback {
         return mMap.cameraPosition.target
     }
 
+    private fun handleSmoothedLocations(stepsArray: JSONArray) {
+        if (!isMapReady || stepsArray.length() == 0) return
+
+        val path = mutableListOf<Triple<LatLng, Double, Int>>()
+
+        for (i in 0 until stepsArray.length()) {
+            val obj = stepsArray.getJSONObject(i)
+            val lat = obj.getDouble("predicted_latitude")
+            val lng = obj.getDouble("predicted_longitude")
+            val acc = obj.getDouble("predicted_accuracy")
+            val step = obj.optInt("step", i)
+
+            path.add(Triple(LatLng(lat, lng), acc, step))
+        }
+
+        startSmoothMovement(path)
+    }
+
+    private fun animateAlongPath(
+        path: List<Triple<LatLng, Double, Int>>,
+        stepDurationMs: Long
+    ) {
+        var index = 0
+
+        movementAnimator = ValueAnimator.ofFloat(0f, 1f).apply {
+            duration = stepDurationMs
+            repeatCount = path.size - 2
+            repeatMode = ValueAnimator.RESTART
+
+            addUpdateListener { animator ->
+                val fraction = animator.animatedFraction
+
+                val start = path[index]
+                val end = path[index + 1]
+
+                val lat = start.first.latitude +
+                        (end.first.latitude - start.first.latitude) * fraction
+                val lng = start.first.longitude +
+                        (end.first.longitude - start.first.longitude) * fraction
+
+                val pos = LatLng(lat, lng)
+
+                movingMarker?.position = pos
+                movingAccuracyCircle?.center = pos
+                movingAccuracyCircle?.radius =
+                    start.second + (end.second - start.second) * fraction
+            }
+
+            addListener(object : AnimatorListenerAdapter() {
+                override fun onAnimationRepeat(animation: Animator) {
+                    index++
+                }
+
+                override fun onAnimationEnd(animation: Animator) {
+                    // Snap to final position to avoid drift
+                    val last = path.last()
+                    movingMarker?.position = last.first
+                    movingAccuracyCircle?.center = last.first
+                    movingAccuracyCircle?.radius = last.second
+                }
+            })
+        }
+
+        movementAnimator?.start()
+    }
+
+    private fun ensureMovingMarker(first: Triple<LatLng, Double, Int>) {
+        if (movingMarker != null) return
+
+        movingMarker = mMap.addMarker(
+            MarkerOptions()
+                .position(first.first)
+                .title("Smoothed Position")
+                .icon(BitmapDescriptorFactory.fromResource(R.mipmap.car_pin))
+        )
+
+        movingAccuracyCircle = mMap.addCircle(
+            CircleOptions()
+                .center(first.first)
+                .radius(first.second)
+                .strokeColor(Color.MAGENTA)
+                .strokeWidth(2f)
+                .fillColor(Color.argb(40, 255, 0, 255))
+        )
+    }
+
+    private fun startSmoothMovement(
+        path: List<Triple<LatLng, Double, Int>>
+    ) {
+        movementAnimator?.cancel()
+
+        if (path.size < 2) return
+
+        val totalDurationMs = intervalSeconds * 1000L
+        val stepDurationMs = totalDurationMs / (path.size - 1)
+
+        ensureMovingMarker(path.first())
+        animateAlongPath(path, stepDurationMs)
+    }
+
     private fun startService(intervalSeconds: Int) {
+        this.intervalSeconds = intervalSeconds
         val intent = Intent(this, DataCollectionService::class.java)
         intent.putExtra("INTERVAL_SECONDS", intervalSeconds)
 
