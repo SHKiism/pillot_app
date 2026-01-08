@@ -23,6 +23,7 @@ import androidx.annotation.RequiresApi
 import androidx.annotation.RequiresPermission
 import androidx.lifecycle.ViewModelProvider
 import com.example.myapplication.app.MyApplication
+import com.example.myapplication.data.local.PreviousDataStore
 import com.example.myapplication.model.InfoModel
 import com.example.myapplication.repository.SensorRepository
 import com.example.myapplication.viewmodel.MainActivityViewModel
@@ -130,16 +131,27 @@ class DataCollectionService : Service() {
 
             val pinData = CorrectLocHolder.json()
 
-            val inf = InfoModel(
-                locInfo.toString(),
-                cellInfo.toString(),
-                wifiInfo.toString(),
-                deviceInfo.toString(),
-                gnssInfo.toString(),
-                pinData,
-                sensorsInfo.toString()
+            val currentJson = JSONObject().apply {
+                put("sensors", sensorsInfo)
+                put("timestamp", System.currentTimeMillis())
+            }
+
+            val previousJsonString = PreviousDataStore.load(this)
+
+            val infoModel = InfoModel(
+                location = locInfo.toString(),
+                cellTowerInfo = cellInfo.toString(),
+                availableWifi = wifiInfo.toString(),
+                deviceInfo = deviceInfo.toString(),
+                gnssInfo = gnssInfo.toString(),
+                correctLoc = pinData,
+                sensorsInfo = sensorsInfo.toString(),
+                previousData = previousJsonString
             )
-            viewModel.getUser(inf)
+
+            viewModel.getUser(infoModel)
+
+            PreviousDataStore.save(this, currentJson.toString())
 
             Log.d("SERVICE", "Data sent to server via ViewModel")
         } catch (e: Exception) {
@@ -317,7 +329,7 @@ class DataCollectionService : Service() {
             item.put("RSSI", r.level)
             item.put("frequency", r.frequency)
             item.put("capabilities", r.capabilities)
-            item.put("timestamp", r.timestamp)
+            item.put("timestamp", System.currentTimeMillis())
             scanArray.put(item)
         }
 
@@ -329,7 +341,6 @@ class DataCollectionService : Service() {
 
         return json
     }
-
 
     private fun getDeviceInfo(): JSONObject {
         val json = JSONObject()

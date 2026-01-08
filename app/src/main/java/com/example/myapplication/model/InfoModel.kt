@@ -8,4 +8,5 @@ class InfoModel(
     var gnssInfo: String,
     var correctLoc: String,
     var sensorsInfo: String,
+    var previousData: String?
 )

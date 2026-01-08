@@ -79,7 +79,7 @@ object SensorRepository {
                     sensorType = event.sensor.type,
                     values = event.values.clone(),
                     accuracy = event.accuracy,
-                    timestamp = event.timestamp,
+                    timestamp = System.currentTimeMillis(),
                     isAvailable = true
                 )
                 liveData.postValue(data)
@@ -256,7 +256,7 @@ object SensorRepository {
             Sensor.TYPE_GYROSCOPE,
             Sensor.TYPE_MAGNETIC_FIELD,
             Sensor.TYPE_GRAVITY,
-            Sensor.TYPE_LINEAR_ACCELERATION  -> {
+            Sensor.TYPE_LINEAR_ACCELERATION -> {
                 json.put("x", data.values.getOrNull(0) ?: 0f)
                 json.put("y", data.values.getOrNull(1) ?: 0f)
                 json.put("z", data.values.getOrNull(2) ?: 0f)
@@ -276,17 +276,6 @@ object SensorRepository {
         }
 
         return json
-    }
-
-    fun startMagnetometerSensor(): LiveData<SensorData> {
-        magneticField?.let {
-            sensorManager.registerListener(
-                magneticFieldListener,
-                it,
-                SensorManager.SENSOR_DELAY_NORMAL
-            )
-        }
-        return magneticFieldLiveData
     }
 
     fun getAllAvailableSensors(): LiveData<List<SensorInfo>> {
