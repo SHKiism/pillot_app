@@ -5,7 +5,7 @@ import android.content.SharedPreferences
 
 object PreviousDataStore {
 
-    private const val PREF_NAME = "sensor_previous_data"
+    private const val PREF_NAME = "previous_data"
     private const val KEY_LAST_PAYLOAD = "last_payload"
 
     private fun prefs(context: Context): SharedPreferences =

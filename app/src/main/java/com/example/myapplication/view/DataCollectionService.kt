@@ -133,6 +133,7 @@ class DataCollectionService : Service() {
 
             val currentJson = JSONObject().apply {
                 put("sensorsInfo", sensorsInfo)
+                put("location", locInfo)
                 put("timestamp", System.currentTimeMillis())
             }
 
