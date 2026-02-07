@@ -155,53 +155,44 @@ class MainActivity : AppCompatActivity(), OnMapReadyCallback {
     private fun parseAllLocationsDynamically(data: JSONObject) {
         runOnUiThread {
             val existingVisibility = locationDataList.associate { it.name to it.isVisible }
-
             locationDataList.clear()
-
-            val keys = data.keys()
+            val locationsObj = data.optJSONObject("locations") ?: return@runOnUiThread
+            val keys = locationsObj.keys()
             while (keys.hasNext()) {
                 val key = keys.next()
+                try {
+                    val locationObj = locationsObj.getJSONObject(key)
 
-                if (key.endsWith("_location") || key == "gnss_location" ||
-                    key == "dead_rocking_location"
-                ) {
-                    try {
-                        val locationObj = data.getJSONObject(key)
+                    val lat = locationObj.optDouble("latitude", Double.NaN)
+                    val lon = locationObj.optDouble("longitude", Double.NaN)
 
-                        if (locationObj.has("latitude") && locationObj.has("longitude")) {
-                            val lat = locationObj.optDouble("latitude", Double.NaN)
-                            val lon = locationObj.optDouble("longitude", Double.NaN)
-
-                            // Validate coordinates
-                            if (!lat.isNaN() && !lon.isNaN() &&
-                                lat != 0.0 && lon != 0.0
-                            ) {
-                                val accuracy = locationObj.optDouble("accuracy", 0.0)
-                                val color = locationColors[key] ?: locationColors["default"]!!
-                                val readableName = formatLocationName(key)
-
-                                val isVisible = existingVisibility[readableName] ?: true
-
-                                locationDataList.add(
-                                    LocationMarkerData(
-                                        name = readableName,
-                                        latitude = lat,
-                                        longitude = lon,
-                                        accuracy = accuracy,
-                                        color = color,
-                                        isVisible = isVisible
-                                    )
-                                )
-
-                                Log.d(
-                                    "LOCATION_PARSER",
-                                    "Added location: $readableName ($lat, $lon)"
-                                )
-                            }
-                        }
-                    } catch (e: Exception) {
-                        Log.e("LOCATION_PARSER", "Error parsing location key: $key", e)
+                    if (lat.isNaN() || lon.isNaN() || lat == 0.0 || lon == 0.0) {
+                        continue
                     }
+
+                    val accuracy = locationObj.optDouble("accuracy", 0.0)
+                    val color = locationColors[key] ?: locationColors["default"]!!
+                    val readableName = key
+                        .replace("_", " ")
+                        .replaceFirstChar { it.titlecase(Locale.getDefault()) }
+
+                    val isVisible = existingVisibility[readableName] ?: true
+
+                    locationDataList.add(
+                        LocationMarkerData(
+                            name = readableName,
+                            latitude = lat,
+                            longitude = lon,
+                            accuracy = accuracy,
+                            color = color,
+                            isVisible = isVisible
+                        )
+                    )
+
+                    Log.d("LOCATION_PARSER", "Added location: $readableName")
+
+                } catch (e: Exception) {
+                    Log.e("LOCATION_PARSER", "Failed to parse $key", e)
                 }
             }
 
@@ -209,19 +200,6 @@ class MainActivity : AppCompatActivity(), OnMapReadyCallback {
 
             Log.d("LOCATION_PARSER", "Total locations parsed: ${locationDataList.size}")
         }
-    }
-
-    private fun formatLocationName(key: String): String {
-        return key
-            .replace("_location", "")
-            .replace("_", " ")
-            .split(" ")
-            .joinToString(" ") { word ->
-                word.replaceFirstChar {
-                    if (it.isLowerCase()) it.titlecase(Locale.getDefault())
-                    else it.toString()
-                }
-            } + " Location"
     }
 
     private fun displayAllLocations() {
